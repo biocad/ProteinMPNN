@@ -34,7 +34,7 @@ if __name__=='__main__':
     parser=ArgumentParser('Create fastas for clustering via MMseqs')
     parser.add_argument('--summary_csv', type=str,default=Path('/mnt/sabdab/summary.csv'))
     parser.add_argument('--chothia_subdir', type=str,default=Path("/mnt/sabdab/chothia"))
-    parser.add_argument('--regions',default=['CDR_H1','CDR_H2','CDR_H3','CDR_L1','CDR_L2','CDR_L3'],nargs='*')
+    parser.add_argument('--regions',default=['CDR_H3'],nargs='*')
 
     args=parser.parse_args()
 
