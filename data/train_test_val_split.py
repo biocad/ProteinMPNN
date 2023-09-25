@@ -26,7 +26,7 @@ def train_test_split(df,test_part=0.2,seed=42):
 
 
 if __name__=='__main__':
-    cluster='clusterRes_0.5_DB_CDR_H3.fasta_cluster'
+    cluster='clusterRes_0.5_DB_CDR_H1_CDR_H2_CDR_H3_CDR_L1_CDR_L2_CDR_L3.fasta_cluster'
     summary_csv=f'train_and_val_renamed_{cluster}.tsv'
     df = pd.read_csv(summary_csv,sep="\t").dropna()
     train,test=train_test_split(df)
