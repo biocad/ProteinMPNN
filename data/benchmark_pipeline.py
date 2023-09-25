@@ -2,7 +2,6 @@ import pandas as pd
 from pathlib import Path
 
 def filter_sample(clusters_csv,benchmark_clusters,t):
-    #ids_bench=in_benchmark.dropna().loc[in_benchmark['in_benchmark'],'0'].to_list()
     cl_bench=benchmark_clusters.loc[:,'cluster'].value_counts()
     new_bench=benchmark_clusters['id'].tolist()
     for _,row in benchmark_clusters.iterrows():
@@ -70,7 +69,7 @@ if __name__=='__main__':
     #     if row[clustering_regions] not in ids_bench:
     #         df=pd.concat([df,row.to_list()],ignore_index=True)
 
-    t=50
+    t=30
     train,test=filter_sample(clusters_csv,benchmark_clusters_csv,t)
     train[['id',clustering_regions]].to_csv(f'train_and_val_{clustering_regions}.tsv',sep='\t',index=False)
     test.to_csv(f'test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
