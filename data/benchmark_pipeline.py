@@ -15,7 +15,7 @@ def filter_sample(clusters_csv,benchmark_clusters,t):
 if __name__=='__main__':
     benchmark_path=Path('rabd_benchmark.txt')
     clusters_path=Path('/mnt/sabdab/clusters.tsv')
-    clustering_regions='renamed_clusterRes_0.5_DB_CDR_H3_CDR_H2_CDR_H1_CDR_L1_CDR_L2_CDR_L3.fasta_cluster'
+    clustering_regions='renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster'
     benchmark_csv=pd.read_csv(benchmark_path,header=None)
     clusters_csv=pd.read_csv(clusters_path,sep='\t')#.dropna()
     benchmark_clusters_csv=pd.DataFrame()

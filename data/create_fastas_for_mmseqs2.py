@@ -94,4 +94,4 @@ if __name__=='__main__':
 # after creating fast launch clustering via MMseqs2
 # FASTA=<fasta file name> && IDENTITY=<identity parameter for clustering> && mmseqs easy-cluster $FASTA  clusterRes_${IDENTITY}_${FASTA}  tmp --min-seq-id $IDENTITY -c 0.8 --cov-mode 1
 # example
-# FASTA=DB_FR_H1_FR_H2_FR_H3_FR_L1_FR_L2_FR_L3.fasta && IDENTITY=0.5 && mmseqs easy-cluster $FASTA  clusterRes_${IDENTITY}_${FASTA}  tmp --min-seq-id $IDENTITY -c 0.8 --cov-mode 1
+# FASTA=DB_CDR_H3.fasta && IDENTITY=0.5 && mmseqs easy-cluster $FASTA  clusterRes_${IDENTITY}_${FASTA}  tmp --min-seq-id $IDENTITY -c 0.8 --cov-mode 1
