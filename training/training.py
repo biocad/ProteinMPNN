@@ -1,7 +1,9 @@
 import argparse
 import os.path
+from pathlib import Path
+import pickle
 
-def main(args):
+def main(args, preprocessed_path):
     import json, time, os, sys, glob
     import shutil
     import warnings
@@ -20,6 +22,8 @@ def main(args):
     from utils import worker_init_fn, get_pdbs, loader_pdb, build_training_clusters, PDB_dataset, StructureDataset, StructureLoader
     from model_utils import featurize, loss_smoothed, loss_nll, get_std_opt, ProteinMPNN
 
+    with open(preprocessed_path, "rb") as f:
+         d = pickle.load(f)
     scaler = torch.cuda.amp.GradScaler()
      
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
@@ -65,14 +69,6 @@ def main(args):
         args.max_protein_length = 1000
         args.batch_size = 1000
 
-    train, valid, test = build_training_clusters(params, args.debug)
-     
-    train_set = PDB_dataset(list(train.keys()), loader_pdb, train, params)
-    train_loader = torch.utils.data.DataLoader(train_set, worker_init_fn=worker_init_fn, **LOAD_PARAM)
-    valid_set = PDB_dataset(list(valid.keys()), loader_pdb, valid, params)
-    valid_loader = torch.utils.data.DataLoader(valid_set, worker_init_fn=worker_init_fn, **LOAD_PARAM)
-
-
     model = ProteinMPNN(node_features=args.hidden_dim, 
                         edge_features=args.hidden_dim, 
                         hidden_dim=args.hidden_dim, 
@@ -99,129 +95,108 @@ def main(args):
     if PATH:
         optimizer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-
-    with ProcessPoolExecutor(max_workers=12) as executor:
-        q = queue.Queue(maxsize=3)
-        p = queue.Queue(maxsize=3)
-        for i in range(3):
-            q.put_nowait(executor.submit(get_pdbs, train_loader, 1, args.max_protein_length, args.num_examples_per_epoch))
-            p.put_nowait(executor.submit(get_pdbs, valid_loader, 1, args.max_protein_length, args.num_examples_per_epoch))
-        pdb_dict_train = q.get().result()
-        pdb_dict_valid = p.get().result()
-       
-        dataset_train = StructureDataset(pdb_dict_train, truncate=None, max_length=args.max_protein_length) 
-        dataset_valid = StructureDataset(pdb_dict_valid, truncate=None, max_length=args.max_protein_length)
-        
-        loader_train = StructureLoader(dataset_train, batch_size=args.batch_size)
-        loader_valid = StructureLoader(dataset_valid, batch_size=args.batch_size)
-        
-        reload_c = 0 
-        for e in range(args.num_epochs):
-            t0 = time.time()
-            e = epoch + e
-            model.train()
-            train_sum, train_weights = 0., 0.
-            train_acc = 0.
-            if e % args.reload_data_every_n_epochs == 0:
-                if reload_c != 0:
-                    pdb_dict_train = q.get().result()
-                    dataset_train = StructureDataset(pdb_dict_train, truncate=None, max_length=args.max_protein_length)
-                    loader_train = StructureLoader(dataset_train, batch_size=args.batch_size)
-                    pdb_dict_valid = p.get().result()
-                    dataset_valid = StructureDataset(pdb_dict_valid, truncate=None, max_length=args.max_protein_length)
-                    loader_valid = StructureLoader(dataset_valid, batch_size=args.batch_size)
-                    q.put_nowait(executor.submit(get_pdbs, train_loader, 1, args.max_protein_length, args.num_examples_per_epoch))
-                    p.put_nowait(executor.submit(get_pdbs, valid_loader, 1, args.max_protein_length, args.num_examples_per_epoch))
-                reload_c += 1
-            for _, batch in enumerate(loader_train):
-                start_batch = time.time()
-                X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device)
-                elapsed_featurize = time.time() - start_batch
-                optimizer.zero_grad()
-                mask_for_loss = mask*chain_M
-                
-                if args.mixed_precision:
-                    with torch.cuda.amp.autocast():
-                        log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
-                        _, loss_av_smoothed = loss_smoothed(S, log_probs, mask_for_loss)
-           
-                    scaler.scale(loss_av_smoothed).backward()
-                     
-                    if args.gradient_norm > 0.0:
-                        total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_norm)
-
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
+    dataset_train = StructureDataset(d, truncate=None, max_length=args.max_protein_length) 
+    dataset_valid = StructureDataset(d, truncate=None, max_length=args.max_protein_length)
+    
+    loader_train = StructureLoader(dataset_train, batch_size=args.batch_size)
+    loader_valid = StructureLoader(dataset_valid, batch_size=args.batch_size)
+    
+    reload_c = 0 
+    for e in range(args.num_epochs):
+        t0 = time.time()
+        e = epoch + e
+        model.train()
+        train_sum, train_weights = 0., 0.
+        train_acc = 0.
+        for _, batch in enumerate(loader_train):
+            start_batch = time.time()
+            X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device)
+            elapsed_featurize = time.time() - start_batch
+            optimizer.zero_grad()
+            mask_for_loss = mask*chain_M
+            
+            if args.mixed_precision:
+                with torch.cuda.amp.autocast():
                     log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
                     _, loss_av_smoothed = loss_smoothed(S, log_probs, mask_for_loss)
-                    loss_av_smoothed.backward()
-
-                    if args.gradient_norm > 0.0:
-                        total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_norm)
-
-                    optimizer.step()
-                
-                loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
-            
-                train_sum += torch.sum(loss * mask_for_loss).cpu().data.numpy()
-                train_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
-                train_weights += torch.sum(mask_for_loss).cpu().data.numpy()
-
-                total_step += 1
-
-            model.eval()
-            with torch.no_grad():
-                validation_sum, validation_weights = 0., 0.
-                validation_acc = 0.
-                for _, batch in enumerate(loader_valid):
-                    X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device)
-                    log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
-                    mask_for_loss = mask*chain_M
-                    loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
+        
+                scaler.scale(loss_av_smoothed).backward()
                     
-                    validation_sum += torch.sum(loss * mask_for_loss).cpu().data.numpy()
-                    validation_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
-                    validation_weights += torch.sum(mask_for_loss).cpu().data.numpy()
-            
-            train_loss = train_sum / train_weights
-            train_accuracy = train_acc / train_weights
-            train_perplexity = np.exp(train_loss)
-            validation_loss = validation_sum / validation_weights
-            validation_accuracy = validation_acc / validation_weights
-            validation_perplexity = np.exp(validation_loss)
-            
-            train_perplexity_ = np.format_float_positional(np.float32(train_perplexity), unique=False, precision=3)     
-            validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
-            train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
-            validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
-    
-            t1 = time.time()
-            dt = np.format_float_positional(np.float32(t1-t0), unique=False, precision=1) 
-            with open(logfile, 'a') as f:
-                f.write(f'epoch: {e+1}, step: {total_step}, time: {dt}, train: {train_perplexity_}, valid: {validation_perplexity_}, train_acc: {train_accuracy_}, valid_acc: {validation_accuracy_}\n')
-            print(f'epoch: {e+1}, step: {total_step}, time: {dt}, train: {train_perplexity_}, valid: {validation_perplexity_}, train_acc: {train_accuracy_}, valid_acc: {validation_accuracy_}')
-            
-            checkpoint_filename_last = base_folder+'model_weights/epoch_last.pt'.format(e+1, total_step)
-            torch.save({
-                        'epoch': e+1,
-                        'step': total_step,
-                        'num_edges' : args.num_neighbors,
-                        'noise_level': args.backbone_noise,
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.optimizer.state_dict(),
-                        }, checkpoint_filename_last)
+                if args.gradient_norm > 0.0:
+                    total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_norm)
 
-            if (e+1) % args.save_model_every_n_epochs == 0:
-                checkpoint_filename = base_folder+'model_weights/epoch{}_step{}.pt'.format(e+1, total_step)
-                torch.save({
-                        'epoch': e+1,
-                        'step': total_step,
-                        'num_edges' : args.num_neighbors,
-                        'noise_level': args.backbone_noise, 
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.optimizer.state_dict(),
-                        }, checkpoint_filename)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
+                _, loss_av_smoothed = loss_smoothed(S, log_probs, mask_for_loss)
+                loss_av_smoothed.backward()
+
+                if args.gradient_norm > 0.0:
+                    total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_norm)
+
+                optimizer.step()
+            
+            loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
+        
+            train_sum += torch.sum(loss * mask_for_loss).cpu().data.numpy()
+            train_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
+            train_weights += torch.sum(mask_for_loss).cpu().data.numpy()
+
+            total_step += 1
+
+        model.eval()
+        with torch.no_grad():
+            validation_sum, validation_weights = 0., 0.
+            validation_acc = 0.
+            for _, batch in enumerate(loader_valid):
+                X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device)
+                log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
+                mask_for_loss = mask*chain_M
+                loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
+                
+                validation_sum += torch.sum(loss * mask_for_loss).cpu().data.numpy()
+                validation_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
+                validation_weights += torch.sum(mask_for_loss).cpu().data.numpy()
+        
+        train_loss = train_sum / train_weights
+        train_accuracy = train_acc / train_weights
+        train_perplexity = np.exp(train_loss)
+        validation_loss = validation_sum / validation_weights
+        validation_accuracy = validation_acc / validation_weights
+        validation_perplexity = np.exp(validation_loss)
+        
+        train_perplexity_ = np.format_float_positional(np.float32(train_perplexity), unique=False, precision=3)     
+        validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
+        train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
+        validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
+
+        t1 = time.time()
+        dt = np.format_float_positional(np.float32(t1-t0), unique=False, precision=1) 
+        with open(logfile, 'a') as f:
+            f.write(f'epoch: {e+1}, step: {total_step}, time: {dt}, train: {train_perplexity_}, valid: {validation_perplexity_}, train_acc: {train_accuracy_}, valid_acc: {validation_accuracy_}\n')
+        print(f'epoch: {e+1}, step: {total_step}, time: {dt}, train: {train_perplexity_}, valid: {validation_perplexity_}, train_acc: {train_accuracy_}, valid_acc: {validation_accuracy_}')
+        
+        checkpoint_filename_last = base_folder+'model_weights/epoch_last.pt'.format(e+1, total_step)
+        torch.save({
+                    'epoch': e+1,
+                    'step': total_step,
+                    'num_edges' : args.num_neighbors,
+                    'noise_level': args.backbone_noise,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.optimizer.state_dict(),
+                    }, checkpoint_filename_last)
+
+        if (e+1) % args.save_model_every_n_epochs == 0:
+            checkpoint_filename = base_folder+'model_weights/epoch{}_step{}.pt'.format(e+1, total_step)
+            torch.save({
+                    'epoch': e+1,
+                    'step': total_step,
+                    'num_edges' : args.num_neighbors,
+                    'noise_level': args.backbone_noise, 
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.optimizer.state_dict(),
+                    }, checkpoint_filename)
 
 
 if __name__ == "__main__":
@@ -247,5 +222,6 @@ if __name__ == "__main__":
     argparser.add_argument("--gradient_norm", type=float, default=-1.0, help="clip gradient norm, set to negative to omit clipping")
     argparser.add_argument("--mixed_precision", type=bool, default=True, help="train with mixed precision")
  
-    args = argparser.parse_args()    
-    main(args)   
+    args = argparser.parse_args() 
+    preprocessed_path = Path("/mnt/proteinmpnn/ProteinMPNN_preprocessed_chothia.pickle")
+    main(args, preprocessed_path)   
