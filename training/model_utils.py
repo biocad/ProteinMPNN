@@ -15,8 +15,34 @@ import torch.nn.functional as F
 import random
 import itertools
 
+def get_index_of_masks(len_seq:int,max_parts:int,max_length:int)->list[int]:
+    """
+    Randomly generates mask with length equal to len_seq 
+    Args:
+        len_seq (int): length of masked sequence
+        max_parts (int): quantity of maxima possible parts in the mask
+        max_length (int): maxima possible length of continuous interval in the mask
+    Returns:
+        list[int]: sequence that contains only 0 or 1, 0 -- visible element, 1 -- masked element 
+    """
+    parts=random.randint(1,max_parts)
+    tuples=[]
+    mask=[0]*len_seq
+    for _ in range(parts):
+        s=random.randint(0,len_seq-max_length-1)
+        e=random.randint(s,s+max_length-1)
+        f=False
+        for t in tuples:
+            if s>=t[0] and s<=t[1] or e>=t[0] and e<=t[1]:
+                f=True
+                break
+        if not f:
+            tuples.append((s,e))
+            for i in range(s,e+1):
+                mask[i]=1
+    return mask
 
-def featurize(batch, device):
+def featurize(batch, device,max_parts=6,max_length=6):
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     B = len(batch)
     lengths = np.array([len(b['seq']) for b in batch], dtype=np.int32) #sum of chain seq lengths
@@ -80,7 +106,7 @@ def featurize(batch, device):
                 chain_seq = b[f'seq_chain_{letter}']
                 chain_length = len(chain_seq)
                 chain_coords = b[f'coords_chain_{letter}'] #this is a dictionary
-                chain_mask = np.ones(chain_length) #0.0 for visible chains
+                chain_mask=np.array(get_index_of_masks(len(chain_seq),max_parts,max_length))
                 x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']], 1) #[chain_lenght,4,3]
                 x_chain_list.append(x_chain)
                 chain_mask_list.append(chain_mask)
