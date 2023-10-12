@@ -15,7 +15,10 @@ import torch.nn.functional as F
 import random
 import itertools
 
-def get_index_of_masks(len_seq:int,max_parts:int,max_length:int)->list[int]:
+from pathlib import Path
+from proteinlib.structure.antibody_antigen_complex import AntibodyAntigenComplex, NumberingScheme
+
+def get_mask_random(len_seq:int,max_parts:int,max_length:int)->list[int]:
     """
     Randomly generates mask with length equal to len_seq 
     Args:
@@ -36,11 +39,34 @@ def get_index_of_masks(len_seq:int,max_parts:int,max_length:int)->list[int]:
             if s>=t[0] and s<=t[1] or e>=t[0] and e<=t[1]:
                 f=True
                 break
-        if not f:
+        if not f and (s==0 or not mask[s-1]) and (e==len_seq-1 or not mask[e+1]):
             tuples.append((s,e))
             for i in range(s,e+1):
                 mask[i]=1
     return mask
+
+def get_mask_cdrs_one_chain(chain,max_parts,max_length):
+    r=chain.region_boundaries
+    cdrs_index=[(r[i],r[i+1]) for i in range(1,len(r)-1,2)]
+    chain_len=sum([t[1]-t[0] for t in cdrs_index])
+    cdrs_mask=get_mask_random(chain_len,max_parts,max_length)
+    mask=[0]*len(chain.sequence)
+    j=0
+    for t in cdrs_index:
+        for i in range(t[0],t[1]):
+            mask[i]=cdrs_mask[j]
+            j+=1
+    return mask
+
+def get_mask_cdrs(pdb,heavy_chain_id,light_chain_id,antigen_chain_ids,max_parts,max_length,numbering=NumberingScheme.CHOTHIA):
+    ab_complex = AntibodyAntigenComplex.from_pdb(
+        pdb=pdb,
+        heavy_chain_id=heavy_chain_id,
+        light_chain_id=light_chain_id,
+        antigen_chain_ids=antigen_chain_ids,
+        numbering=numbering,
+    )
+    return get_mask_cdrs_one_chain(ab_complex.antibody.heavy_chain,max_parts,max_length),get_mask_cdrs_one_chain(ab_complex.antibody.light_chain,max_parts,max_length)
 
 def featurize(batch, device,max_parts=6,max_length=6):
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
@@ -106,7 +132,7 @@ def featurize(batch, device,max_parts=6,max_length=6):
                 chain_seq = b[f'seq_chain_{letter}']
                 chain_length = len(chain_seq)
                 chain_coords = b[f'coords_chain_{letter}'] #this is a dictionary
-                chain_mask=np.array(get_index_of_masks(len(chain_seq),max_parts,max_length))
+                chain_mask=np.array(get_mask_random(len(chain_seq),max_parts,max_length))
                 x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']], 1) #[chain_lenght,4,3]
                 x_chain_list.append(x_chain)
                 chain_mask_list.append(chain_mask)
@@ -536,3 +562,13 @@ def get_std_opt(parameters, d_model, step):
     return NoamOpt(
         d_model, 2, 4000, torch.optim.Adam(parameters, lr=0, betas=(0.9, 0.98), eps=1e-9), step
     )
+
+if __name__=='__main__':
+    pdb=Path('/mnt/sabdab/chothia/1a14.pdb')
+    heavy_chain_id='H'
+    light_chain_id='L'
+    antigen_chain_ids=['N']
+    random.seed(42)
+    max_parts=4
+    max_length=4
+    get_mask_cdrs(pdb,heavy_chain_id,light_chain_id,antigen_chain_ids,max_parts,max_length)
