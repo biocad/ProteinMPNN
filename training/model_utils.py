@@ -562,13 +562,3 @@ def get_std_opt(parameters, d_model, step):
     return NoamOpt(
         d_model, 2, 4000, torch.optim.Adam(parameters, lr=0, betas=(0.9, 0.98), eps=1e-9), step
     )
-
-if __name__=='__main__':
-    pdb=Path('/mnt/sabdab/chothia/1a14.pdb')
-    heavy_chain_id='H'
-    light_chain_id='L'
-    antigen_chain_ids=['N']
-    random.seed(42)
-    max_parts=4
-    max_length=4
-    get_mask_cdrs(pdb,heavy_chain_id,light_chain_id,antigen_chain_ids,max_parts,max_length)
