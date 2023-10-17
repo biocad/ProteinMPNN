@@ -32,7 +32,7 @@ if __name__=='__main__':
     args=parser.parse_args()
     cluster_csv=args.cluster_tsv
     renamed_csv=Path(f'{str(cluster_csv.parent)}/renamed_{cluster_csv.name}')
-    df=pd.read_csv(cluster_csv,sep="\t")
+    df=pd.read_csv(cluster_csv,sep="\t",header=None)
     d=df_to_dict(df)
     d_sorted=get_sorted_names(d)
     df_clusters_renamed=rename_clusters(df,d_sorted)
