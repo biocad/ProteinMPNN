@@ -20,9 +20,9 @@ def dict_train_test_split(complex_list,train_ids,val_ids,test_ids,del_train_ids,
             pass
         else:
             print(f'Complex id {c["name_long"]} is not presented in train or test IDs')
-    return d_train,d_test
+    return d_train,d_val
 
-def main(args, preprocessed_path, train_ids, test_ids):
+def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_test_ids):
     import json, time, os, sys, glob
     import shutil
     import warnings
@@ -114,7 +114,7 @@ def main(args, preprocessed_path, train_ids, test_ids):
     if PATH:
         optimizer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-    d_train,d_test=dict_train_test_split(d,train_ids,test_ids)
+    d_train,d_test=dict_train_test_split(d,train_ids,val_ids,test_ids,del_train_ids,del_test_ids)
     dataset_train = StructureDataset(d_train, truncate=None, max_length=args.max_protein_length) 
     dataset_valid = StructureDataset(d_test, truncate=None, max_length=args.max_protein_length)
     
@@ -252,5 +252,8 @@ if __name__ == "__main__":
     
 
     train_ids=train_file.read_text().splitlines()
+    val_ids=val_file.read_text().splitlines()
     test_ids=test_file.read_text().splitlines()
-    main(args, preprocessed_path,train_ids,test_ids)   
+    del_train_ids=del_train_file.read_text().splitlines()
+    del_test_ids=del_test_file.read_text().splitlines()
+    main(args, preprocessed_path,train_ids,val_ids,test_ids,del_train_ids,del_test_ids)   

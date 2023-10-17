@@ -49,13 +49,16 @@ def get_mask_cdrs_one_chain(chain,max_parts,max_length):
     r=chain.region_boundaries
     cdrs_index=[(r[i],r[i+1]) for i in range(1,len(r)-1,2)]
     chain_len=sum([t[1]-t[0] for t in cdrs_index])
-    cdrs_mask=get_mask_random(chain_len,max_parts,max_length)
+    #cdrs_mask=get_mask_random(chain_len,max_parts,max_length)
     mask=[0]*len(chain.sequence)
-    j=0
     for t in cdrs_index:
         for i in range(t[0],t[1]):
-            mask[i]=cdrs_mask[j]
-            j+=1
+            mask[i]=1
+    # j=0
+    # for t in cdrs_index:
+    #     for i in range(t[0],t[1]):
+    #         mask[i]=cdrs_mask[j]
+    #         j+=1
     return mask
 
 def get_mask_cdrs(pdb,heavy_chain_id,light_chain_id,antigen_chain_ids,max_parts,max_length,numbering=NumberingScheme.CHOTHIA):
