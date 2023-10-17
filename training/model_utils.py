@@ -68,7 +68,7 @@ def get_mask_cdrs(pdb,heavy_chain_id,light_chain_id,antigen_chain_ids,max_parts,
     )
     return get_mask_cdrs_one_chain(ab_complex.antibody.heavy_chain,max_parts,max_length),get_mask_cdrs_one_chain(ab_complex.antibody.light_chain,max_parts,max_length)
 
-def featurize(batch, device,max_parts=6,max_length=6):
+def featurize(batch, device,max_parts=6,max_length=6,mode='train',pdb_dir=Path('/mnt/sabdab/chothia')):
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     B = len(batch)
     lengths = np.array([len(b['seq']) for b in batch], dtype=np.int32) #sum of chain seq lengths
@@ -132,7 +132,13 @@ def featurize(batch, device,max_parts=6,max_length=6):
                 chain_seq = b[f'seq_chain_{letter}']
                 chain_length = len(chain_seq)
                 chain_coords = b[f'coords_chain_{letter}'] #this is a dictionary
-                chain_mask=np.array(get_mask_random(len(chain_seq),max_parts,max_length))
+                if mode=='train':
+                    chain_mask=np.array(get_mask_random(chain_length,max_parts,max_length)) 
+                else:
+                    chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length)[masked_chains.index(letter)])
+                    if chain_length!=chain_mask.shape[0]:
+                        chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length)[masked_chains.index(letter)])
+                    assert chain_length==chain_mask.shape[0]
                 x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']], 1) #[chain_lenght,4,3]
                 x_chain_list.append(x_chain)
                 chain_mask_list.append(chain_mask)

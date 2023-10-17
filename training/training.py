@@ -2,8 +2,27 @@ import argparse
 import os.path
 from pathlib import Path
 import pickle
+from tqdm import tqdm
 
-def main(args, preprocessed_path):
+def dict_train_test_split(complex_list,train_ids,val_ids,test_ids,del_train_ids,del_test_ids):
+    d_train=[]
+    d_val=[]
+    for c in complex_list:
+        if c['name_long'] in train_ids:
+            d_train.append(c)
+        elif c['name_long'] in val_ids:
+            d_val.append(c)
+        elif c['name_long'] in test_ids:
+            pass
+        elif c['name_long'] in del_train_ids:
+            pass
+        elif c['name_long'] in del_test_ids:
+            pass
+        else:
+            print(f'Complex id {c["name_long"]} is not presented in train or test IDs')
+    return d_train,d_test
+
+def main(args, preprocessed_path, train_ids, test_ids):
     import json, time, os, sys, glob
     import shutil
     import warnings
@@ -95,8 +114,9 @@ def main(args, preprocessed_path):
     if PATH:
         optimizer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-    dataset_train = StructureDataset(d, truncate=None, max_length=args.max_protein_length) 
-    dataset_valid = StructureDataset(d, truncate=None, max_length=args.max_protein_length)
+    d_train,d_test=dict_train_test_split(d,train_ids,test_ids)
+    dataset_train = StructureDataset(d_train, truncate=None, max_length=args.max_protein_length) 
+    dataset_valid = StructureDataset(d_test, truncate=None, max_length=args.max_protein_length)
     
     loader_train = StructureLoader(dataset_train, batch_size=args.batch_size)
     loader_valid = StructureLoader(dataset_valid, batch_size=args.batch_size)
@@ -150,7 +170,7 @@ def main(args, preprocessed_path):
             validation_sum, validation_weights = 0., 0.
             validation_acc = 0.
             for _, batch in enumerate(loader_valid):
-                X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device)
+                X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device,mode='val')
                 log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
                 mask_for_loss = mask*chain_M
                 loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
@@ -223,5 +243,14 @@ if __name__ == "__main__":
     argparser.add_argument("--mixed_precision", type=bool, default=True, help="train with mixed precision")
  
     args = argparser.parse_args() 
-    preprocessed_path = Path("/mnt/proteinmpnn/ProteinMPNN_preprocessed_chothia.pickle")
-    main(args, preprocessed_path)   
+    preprocessed_path = Path("/mnt/proteinmpnn/ProteinMPNN_preprocessed_chothia_proteinlib_logging.pickle")
+    train_file=Path('train_clusterRes_0.5_DB_CDR_H3.fasta_cluster.txt')
+    val_file=Path('val_clusterRes_0.5_DB_CDR_H3.fasta_cluster.txt')
+    test_file=Path('test_renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster.tsv')
+    del_train_file=Path('deleted_train_and_val_renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster.tsv')
+    del_test_file=Path('deleted_test_renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster.tsv')
+    
+
+    train_ids=train_file.read_text().splitlines()
+    test_ids=test_file.read_text().splitlines()
+    main(args, preprocessed_path,train_ids,test_ids)   
