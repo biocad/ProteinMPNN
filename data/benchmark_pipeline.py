@@ -78,7 +78,7 @@ if __name__=='__main__':
     train,test,del_train,del_test=filter_sample(clusters_csv,benchmark_clusters_csv,t)
     train[['id',clustering_regions]].to_csv(f'train_and_val_{clustering_regions}.tsv',sep='\t',index=False)
     test.to_csv(f'test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
-    del_train[['id',clustering_regions]].to_csv(f'deleted_train_and_val_{clustering_regions}.tsv',sep='\t',index=False)
+    del_train['id'].to_csv(f'deleted_train_and_val_{clustering_regions}.tsv',sep='\t',index=False,header=False)
     del_test.to_csv(f'deleted_test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
     #dropped_clusters.to_csv('dropped.tsv',index=False)
     #df_del.to_csv(f'filtered_sample_{clustering_regions}.tsv',sep='\t',index=False)
