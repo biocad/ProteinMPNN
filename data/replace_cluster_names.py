@@ -36,6 +36,7 @@ if __name__=='__main__':
     d=df_to_dict(df)
     d_sorted=get_sorted_names(d)
     df_clusters_renamed=rename_clusters(df,d_sorted)
+    assert df_clusters_renamed.shape[0]==df.shape[0]
     if renamed_csv.exists():
         raise ValueError(f"file with path {renamed_csv} already exists, change output_file variable or delete file {renamed_csv}")
     else:
