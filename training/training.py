@@ -7,7 +7,11 @@ from tqdm import tqdm
 def dict_train_test_split(complex_list,train_ids,val_ids,test_ids,del_train_ids,del_test_ids):
     d_train=[]
     d_val=[]
+    complex_ids=set()
     for c in complex_list:
+        if c['name'] in complex_ids:
+            continue
+        complex_ids.add(c['name'])
         if c['name_long'] in train_ids:
             d_train.append(c)
         elif c['name_long'] in val_ids:
@@ -97,12 +101,12 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
                         dropout=args.dropout, 
                         augment_eps=args.backbone_noise)
     model.to(device)
-
-
     if PATH:
         checkpoint = torch.load(PATH)
-        total_step = checkpoint['step'] #write total_step from the checkpoint
-        epoch = checkpoint['epoch'] #write epoch from the checkpoint
+        # total_step = checkpoint['step'] #write total_step from the checkpoint
+        # epoch = checkpoint['epoch'] #write epoch from the checkpoint
+        total_step = 0
+        epoch = 0
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
         total_step = 0
@@ -111,8 +115,8 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
     optimizer = get_std_opt(model.parameters(), args.hidden_dim, total_step)
 
 
-    if PATH:
-        optimizer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    # if PATH:
+    #     optimizer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     d_train,d_test=dict_train_test_split(d,train_ids,val_ids,test_ids,del_train_ids,del_test_ids)
     dataset_train = StructureDataset(d_train, truncate=None, max_length=args.max_protein_length) 
@@ -257,3 +261,7 @@ if __name__ == "__main__":
     del_train_ids=del_train_file.read_text().splitlines()
     del_test_ids=del_test_file.read_text().splitlines()
     main(args, preprocessed_path,train_ids,val_ids,test_ids,del_train_ids,del_test_ids)   
+
+# chkpt
+# 0) CDR H3+CDR H3
+# 1) по CDRные метрики при восстановлении по всем

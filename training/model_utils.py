@@ -51,9 +51,10 @@ def get_mask_cdrs_one_chain(chain,max_parts,max_length):
     chain_len=sum([t[1]-t[0] for t in cdrs_index])
     #cdrs_mask=get_mask_random(chain_len,max_parts,max_length)
     mask=[0]*len(chain.sequence)
-    for t in cdrs_index:
-        for i in range(t[0],t[1]):
-            mask[i]=1
+    #for t in cdrs_index:
+    t=cdrs_index[0]
+    for i in range(t[0],t[1]):
+        mask[i]=1
     # j=0
     # for t in cdrs_index:
     #     for i in range(t[0],t[1]):
@@ -71,7 +72,7 @@ def get_mask_cdrs(pdb,heavy_chain_id,light_chain_id,antigen_chain_ids,max_parts,
     )
     return get_mask_cdrs_one_chain(ab_complex.antibody.heavy_chain,max_parts,max_length),get_mask_cdrs_one_chain(ab_complex.antibody.light_chain,max_parts,max_length)
 
-def featurize(batch, device,max_parts=6,max_length=6,mode='train',pdb_dir=Path('/mnt/sabdab/chothia')):
+def featurize(batch, device,max_parts=8,max_length=20,mode='train',pdb_dir=Path('/mnt/sabdab/chothia')):
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     B = len(batch)
     lengths = np.array([len(b['seq']) for b in batch], dtype=np.int32) #sum of chain seq lengths
@@ -135,13 +136,21 @@ def featurize(batch, device,max_parts=6,max_length=6,mode='train',pdb_dir=Path('
                 chain_seq = b[f'seq_chain_{letter}']
                 chain_length = len(chain_seq)
                 chain_coords = b[f'coords_chain_{letter}'] #this is a dictionary
-                if mode=='train':
+                if mode=='test':
                     chain_mask=np.array(get_mask_random(chain_length,max_parts,max_length)) 
                 else:
-                    chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length)[masked_chains.index(letter)])
-                    if chain_length!=chain_mask.shape[0]:
+                    if masked_chains.index(letter)==0:
                         chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length)[masked_chains.index(letter)])
+                    else:
+                        chain_mask = np.zeros(chain_length)
+                    if chain_length!=chain_mask.shape[0]:
+                        if masked_chains.index(letter)==0:
+                            chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length)[masked_chains.index(letter)])
+                        else:
+                            chain_mask= np.zeros(chain_length)
+
                     assert chain_length==chain_mask.shape[0]
+                #chain_mask=np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length)[masked_chains.index(letter)])
                 x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']], 1) #[chain_lenght,4,3]
                 x_chain_list.append(x_chain)
                 chain_mask_list.append(chain_mask)
