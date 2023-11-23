@@ -34,9 +34,9 @@ if __name__=='__main__':
     args=parser.parse_args()
     
     cluster=args.cluster
-    sample_dir=args.sample_dir
+    sample_dir=Path(args.sample_dir)
 
-    summary_csv=sample_dir/f'train_and_val_renamed_{cluster}.tsv'
+    summary_csv=sample_dir/f'train_and_val_{cluster}.tsv'
     df = pd.read_csv(summary_csv,sep="\t").dropna()
     train,test=train_test_split(df)
     print(len(train)/df.shape[0])
