@@ -19,6 +19,6 @@ if __name__=='__main__':
            cols.append(col)
     df_joined=df_joined[cols]
     if joined_tsv.exists():
-        raise ValueError(f"file with path {joined_tsv} already exists, change output_file variable or delete file {joined_csv}")
+        raise ValueError(f"file with path {joined_tsv} already exists, change output_file variable or delete file {joined_tsv}")
     else:
         df_joined.to_csv(joined_tsv,sep='\t',index=False)
