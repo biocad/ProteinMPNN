@@ -5,10 +5,10 @@ from argparse import ArgumentParser
 if __name__=='__main__':
     parser=ArgumentParser('Join tsvs')
     parser.add_argument('--tsvs',type=Path,nargs='+')
-    parser.add_argument('--joined_csv',type=Path,default=Path('joined_clusters.tsv'))
+    parser.add_argument('--joined_tsv',type=Path,default=Path('MMseq/joined_clusters.tsv'))
     args=parser.parse_args()
     tsvs=args.tsvs
-    joined_csv=args.joined_csv
+    joined_tsv=args.joined_tsv
     df_list=[pd.read_csv(t,sep='\t',header=None,names=[t.stem,'id']) for t in tsvs]
     df_joined=df_list[0].copy()
     for df in df_list[1:]:
@@ -18,7 +18,7 @@ if __name__=='__main__':
        if col!='id':
            cols.append(col)
     df_joined=df_joined[cols]
-    if joined_csv.exists():
-        raise ValueError(f"file with path {joined_csv} already exists, change output_file variable or delete file {joined_csv}")
+    if joined_tsv.exists():
+        raise ValueError(f"file with path {joined_tsv} already exists, change output_file variable or delete file {joined_csv}")
     else:
-        df_joined.to_csv(joined_csv,sep='\t',index=False)
+        df_joined.to_csv(joined_tsv,sep='\t',index=False)

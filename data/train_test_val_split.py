@@ -1,4 +1,6 @@
 
+from argparse import ArgumentParser
+from pathlib import Path
 import random
 import pandas as pd
 
@@ -26,11 +28,18 @@ def train_test_split(df,test_part=0.2,seed=42):
 
 
 if __name__=='__main__':
-    cluster='clusterRes_0.5_DB_CDR_H3.fasta_cluster'
-    summary_csv=f'train_and_val_renamed_{cluster}.tsv'
+    parser=ArgumentParser('Rename clusters')
+    parser.add_argument('--cluster',default='clusterRes_0.5_DB_CDR_H3.fasta_cluster',type=str)
+    parser.add_argument('--sample_dir',default=Path('train_val_test'))
+    args=parser.parse_args()
+    
+    cluster=args.cluster
+    sample_dir=args.sample_dir
+
+    summary_csv=sample_dir/f'train_and_val_renamed_{cluster}.tsv'
     df = pd.read_csv(summary_csv,sep="\t").dropna()
     train,test=train_test_split(df)
     print(len(train)/df.shape[0])
     assert len(train)+len(test)==df.shape[0]
-    pd.Series(train).to_csv(f'train_{cluster}.txt',index=False,header=False)
-    pd.Series(test).to_csv(f'val_{cluster}.txt',index=False,header=False)
+    pd.Series(train).to_csv(sample_dir/f'train_{cluster}.txt',index=False,header=False)
+    pd.Series(test).to_csv(sample_dir/f'val_{cluster}.txt',index=False,header=False)

@@ -41,3 +41,4 @@ if __name__=='__main__':
         raise ValueError(f"file with path {renamed_csv} already exists, change output_file variable or delete file {renamed_csv}")
     else:
         df_clusters_renamed.to_csv(renamed_csv,sep='\t',header=False,index=False)
+        print(renamed_csv)

@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import pandas as pd
 from pathlib import Path
 
@@ -57,10 +58,21 @@ def is_in_benchmark(clusters_path,benchmark_clusters_csv,save=False):
 
 
 if __name__=='__main__':
-    benchmark_path=Path('rabd_benchmark.txt')
-    clusters_path=Path('joined_clusters.tsv')
-    clustering_regions='renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster'
-    t=30
+    parser=ArgumentParser('Create fastas for clustering via MMseqs')
+    parser.add_argument('--benchmark_path', type=str,default=Path('rabd_benchmark.txt'))
+    parser.add_argument('--clusters_path', type=str,default=Path("MMseq/joined_clusters.tsv"))
+    parser.add_argument('--clustering_regions',default='renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster')
+    parser.add_argument('--threshhold',default=30)
+    parser.add_argument('--sample_dir',default=Path('train_val_test'),type=Path)
+
+    # parser.add_argument('--identity',default=0.5,type=float)
+    # parser.add_argument('--result_folder',default='MMseq',type=Path)
+    args=parser.parse_args()
+    benchmark_path=args.benchmark_path
+    clusters_path=args.clusters_path
+    clustering_regions=args.clustering_regions
+    t=args.threshhold
+    sample_dir=args.sample_dir
     
     benchmark_clusters_csv=benchmark_statistics(benchmark_path,clusters_path,True)
     
@@ -75,12 +87,13 @@ if __name__=='__main__':
 
     
     train,test,del_train,del_test=filter_sample(clusters_csv,benchmark_clusters_csv,t)
-    train[['id',clustering_regions]].to_csv(f'train_and_val_{clustering_regions}.tsv',sep='\t',index=False)
-    test.to_csv(f'test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
-    del_train['id'].to_csv(f'deleted_train_and_val_{clustering_regions}.tsv',sep='\t',index=False,header=False)
-    del_test.to_csv(f'deleted_test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
+
+    sample_dir.mkdir(exist_ok=True,parents=True)
+    train[['id',clustering_regions]].to_csv(sample_dir/f'train_and_val_{clustering_regions}.tsv',sep='\t',index=False)
+    test.to_csv(sample_dir/f'test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
+    del_train['id'].to_csv(sample_dir/f'deleted_train_and_val_{clustering_regions}.tsv',sep='\t',index=False,header=False)
+    del_test.to_csv(sample_dir/f'deleted_test_{clustering_regions}.tsv',sep='\t',index=False,header=False)
     
     s=set(train['id'].values.tolist())|set(test.values.tolist())|set(del_train['id'].values.tolist())|set(del_test.values.tolist())
     s=set(s)
-    print(len(s))
     assert len(s)==pd.read_csv(clusters_path,sep='\t').shape[0]

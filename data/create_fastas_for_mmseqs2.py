@@ -2,12 +2,12 @@ from pathlib import Path
 from enum import Enum
 from tqdm import tqdm
 import logging
-import sys
 import traceback
 from pathlib import Path
 from typing import Iterable, cast
 from argparse import ArgumentParser
 import pandas as pd
+import subprocess
 
 from proteinlib.structure.antibody_antigen_complex import AntibodyAntigenComplex, NumberingScheme
 
@@ -35,7 +35,8 @@ if __name__=='__main__':
     parser.add_argument('--summary_csv', type=str,default=Path('/mnt/sabdab/summary.csv'))
     parser.add_argument('--chothia_subdir', type=str,default=Path("/mnt/sabdab/chothia"))
     parser.add_argument('--regions',default=['CDR_L1','CDR_L2','CDR_L3','CDR_H1','CDR_H2','CDR_H3'],nargs='*')
-
+    parser.add_argument('--identity',default=0.5,type=float)
+    parser.add_argument('--result_folder',default='MMseq',type=Path)
     args=parser.parse_args()
 
     summary_csv=args.summary_csv
@@ -51,11 +52,9 @@ if __name__=='__main__':
         )
         .query("antigen_type in ('protein', 'peptide', 'protein | peptide', 'peptide | protein')")
         .dropna()
-        #.drop_duplicates('pdb')
         .reset_index()
     )
     print(f"Summary records: {df.shape[0]}")
-
     d={}
     for i, row in tqdm(cast(Iterable[tuple[int, pd.Series]], df.iterrows()),total=df.shape[0]):
         uid = f'{row["pdb"]}_{row["Hchain"]}+{row["Lchain"]}-{row["antigen_chain"]}'
@@ -89,10 +88,10 @@ if __name__=='__main__':
         fasta_str='\n'.join([fasta_str,f">{k}\n{v}"])
 
     fasta_str=fasta_str.strip()
-    output_path=Path(f'DB_{"_".join(regions_list)}.fasta')
+    dir=Path(args.result_folder)/'__'.join(args.regions)
+    dir.mkdir(exist_ok=True,parents=True)
+    fasta_file=dir/f'DB_{"_".join(regions_list)}.fasta'
+    output_path=Path(fasta_file)
     output_path.write_text(fasta_str)
-
-# after creating fast launch clustering via MMseqs2
-# FASTA=<fasta file name> && IDENTITY=<identity parameter for clustering> && mmseqs easy-cluster $FASTA  clusterRes_${IDENTITY}_${FASTA}  tmp --min-seq-id $IDENTITY -c 0.8 --cov-mode 1
-# example
-# FASTA=DB_CDR_H3.fasta && IDENTITY=0.5 && mmseqs easy-cluster $FASTA  clusterRes_${IDENTITY}_${FASTA}  tmp --min-seq-id $IDENTITY -c 0.8 --cov-mode 1
+    
+    subprocess.run(['mmseqs', 'easy-cluster', f'{fasta_file}',  str(dir/f'clusterRes_{args.identity}_{fasta_file.name}'),  'tmp', '--min-seq-id', f'{args.identity}', '-c', '0.8', '--cov-mode', '1'])
