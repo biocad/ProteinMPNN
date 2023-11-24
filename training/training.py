@@ -228,7 +228,7 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
         validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
         train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
         validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
-        if validation_accuracy_>max_val_acc:
+        if validation_accuracy>max_val_acc:
             checkpoint_filename_best = base_folder+'model_weights/epoch_best.pt'.format(e+1, total_step)
             torch.save({
                         'epoch': e+1,
@@ -238,7 +238,7 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.optimizer.state_dict(),
                         }, checkpoint_filename_best)
-            max_val_acc=validation_accuracy_
+            max_val_acc=validation_accuracy
         t1 = time.time()
         dt = np.format_float_positional(np.float32(t1-t0), unique=False, precision=1) 
         with open(logfile, 'a') as f:
