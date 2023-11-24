@@ -129,6 +129,7 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
     loader_valid = StructureLoader(dataset_valid, batch_size=args.batch_size)
     
     reload_c = 0 
+    max_val_acc=0
     for e in range(args.num_epochs):
         t0 = time.time()
         e = epoch + e
@@ -227,7 +228,17 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
         validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
         train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
         validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
-
+        if validation_accuracy_>max_val_acc:
+            checkpoint_filename_best = base_folder+'model_weights/epoch_best.pt'.format(e+1, total_step)
+            torch.save({
+                        'epoch': e+1,
+                        'step': total_step,
+                        'num_edges' : args.num_neighbors,
+                        'noise_level': args.backbone_noise,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.optimizer.state_dict(),
+                        }, checkpoint_filename_best)
+            max_val_acc=validation_accuracy_
         t1 = time.time()
         dt = np.format_float_positional(np.float32(t1-t0), unique=False, precision=1) 
         with open(logfile, 'a') as f:
@@ -292,14 +303,20 @@ if __name__ == "__main__":
     argparser.add_argument("--debug", type=bool, default=False, help="minimal data loading for debugging")
     argparser.add_argument("--gradient_norm", type=float, default=-1.0, help="clip gradient norm, set to negative to omit clipping")
     argparser.add_argument("--mixed_precision", type=bool, default=True, help="train with mixed precision")
- 
+    
+    argparser.add_argument("--preprocessed_path", type=Path, default="/mnt/proteinmpnn/ProteinMPNN_preprocessed_chothia_proteinlib_logging.pickle")
+    argparser.add_argument("--regions", type=str, default="H3")
+    argparser.add_argument("--comment", type=str, default="")
+
     args = argparser.parse_args() 
-    preprocessed_path = Path("/mnt/proteinmpnn/ProteinMPNN_preprocessed_chothia_proteinlib_logging.pickle")
-    train_file=Path('train_clusterRes_0.5_DB_CDR_H3.fasta_cluster.txt')
-    val_file=Path('val_clusterRes_0.5_DB_CDR_H3.fasta_cluster.txt')
-    test_file=Path('test_renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster.tsv')
-    del_train_file=Path('deleted_train_and_val_renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster.tsv')
-    del_test_file=Path('deleted_test_renamed_clusterRes_0.5_DB_CDR_H3.fasta_cluster.tsv')
+    preprocessed_path = Path(args.preprocessed_path)
+    regions=args.regions
+    args.path_for_outputs=f'exp_{regions}{args.comment}'
+    train_file=Path(f'train_val_test_{regions}/train_renamed_clusterRes_0.5_DB_CDR_{regions}.fasta_cluster.txt')
+    val_file=Path(f'train_val_test_{regions}/val_renamed_clusterRes_0.5_DB_CDR_{regions}.fasta_cluster.txt')
+    test_file=Path(f'train_val_test_{regions}/test_renamed_clusterRes_0.5_DB_CDR_{regions}.fasta_cluster.tsv')
+    del_train_file=Path(f'train_val_test_{regions}/deleted_train_and_val_renamed_clusterRes_0.5_DB_CDR_{regions}.fasta_cluster.tsv')
+    del_test_file=Path(f'train_val_test_{regions}/deleted_train_and_val_renamed_clusterRes_0.5_DB_CDR_{regions}.fasta_cluster.tsv')
     
 
     train_ids=train_file.read_text().splitlines()
@@ -307,7 +324,9 @@ if __name__ == "__main__":
     test_ids=test_file.read_text().splitlines()
     del_train_ids=del_train_file.read_text().splitlines()
     del_test_ids=del_test_file.read_text().splitlines()
-    indexes_of_cdrs=[[2]]
+    l=['H1','H2','H3']
+    indexes_of_cdrs=[[l.index(regions)]]
+    print(indexes_of_cdrs)
     main(args, preprocessed_path,train_ids,val_ids,test_ids,del_train_ids,del_test_ids,indexes_of_cdrs)   
 
 
