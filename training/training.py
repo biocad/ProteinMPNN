@@ -138,7 +138,7 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
         train_acc = 0.
         for _, batch in enumerate(loader_train):
             start_batch = time.time()
-            X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device,mode='valid',cdr_indexes=[0,indexes_of_cdrs[0][0]])
+            X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device,mode='valid',cdr_indexes=indexes_of_cdrs[0])
             elapsed_featurize = time.time() - start_batch
             optimizer.zero_grad()
             mask_for_loss = mask*chain_M
@@ -175,34 +175,33 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
         dict_val={}
         
         
-        for ind in range(len(indexes_of_cdrs)):
-            for jnd in indexes_of_cdrs[ind]:
-                model.eval()
-                with torch.no_grad():
-                    validation_sum, validation_weights = 0., 0.
-                    validation_acc = 0.
-                    for _, batch in enumerate(loader_valid):
-                        X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device,mode='valid',cdr_indexes=[ind,jnd])
-                        log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
-                        mask_for_loss = mask*chain_M
-                        loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
-                        
-                        validation_sum += torch.sum(loss * mask_for_loss).cpu().data.numpy()
-                        validation_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
-                        validation_weights += torch.sum(mask_for_loss).cpu().data.numpy()
-                
-                # train_loss = train_sum / train_weights
-                # train_accuracy = train_acc / train_weights
-                # train_perplexity = np.exp(train_loss)
-                validation_loss = validation_sum / validation_weights
-                validation_accuracy = validation_acc / validation_weights
-                validation_perplexity = np.exp(validation_loss)
-                
-                #train_perplexity_ = np.format_float_positional(np.float32(train_perplexity), unique=False, precision=3)     
-                validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
-                #train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
-                validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
-                df[(ind,jnd)].append(validation_accuracy_)
+        for ind,jnd in indexes_of_cdrs:
+            model.eval()
+            with torch.no_grad():
+                validation_sum, validation_weights = 0., 0.
+                validation_acc = 0.
+                for _, batch in enumerate(loader_valid):
+                    X, S, mask, lengths, chain_M, residue_idx, mask_self, chain_encoding_all = featurize(batch, device,mode='valid',cdr_indexes=[ind,jnd])
+                    log_probs = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)
+                    mask_for_loss = mask*chain_M
+                    loss, loss_av, true_false = loss_nll(S, log_probs, mask_for_loss)
+                    
+                    validation_sum += torch.sum(loss * mask_for_loss).cpu().data.numpy()
+                    validation_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
+                    validation_weights += torch.sum(mask_for_loss).cpu().data.numpy()
+            
+            # train_loss = train_sum / train_weights
+            # train_accuracy = train_acc / train_weights
+            # train_perplexity = np.exp(train_loss)
+            validation_loss = validation_sum / validation_weights
+            validation_accuracy = validation_acc / validation_weights
+            validation_perplexity = np.exp(validation_loss)
+            
+            #train_perplexity_ = np.format_float_positional(np.float32(train_perplexity), unique=False, precision=3)     
+            validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
+            #train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
+            validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
+            df[(ind,jnd)].append(validation_accuracy_)
         with torch.no_grad():
             validation_sum, validation_weights = 0., 0.
             validation_acc = 0.
@@ -244,9 +243,8 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
         with open(logfile, 'a') as f:
             f.write(f'epoch: {e+1}, step: {total_step}, time: {dt}, train: {train_perplexity_}, valid: {validation_perplexity_}, train_acc: {train_accuracy_}, valid_acc: {validation_accuracy_}\n')
         print(f'epoch: {e+1}, step: {total_step}, time: {dt}, train: {train_perplexity_}, valid: {validation_perplexity_}, train_acc: {train_accuracy_}, valid_acc: {validation_accuracy_}')
-        for ind in range(len(indexes_of_cdrs)):
-            for jnd in indexes_of_cdrs[ind]:
-                print(f'({ind},{jnd}): {df[(ind,jnd)][-1]}',end=' ')
+        for ind,jnd in indexes_of_cdrs:
+            print(f'({ind},{jnd}): {df[(ind,jnd)][-1]}',end=' ')
 
         print()
         df['epoch'].append(e+1)
@@ -325,7 +323,7 @@ if __name__ == "__main__":
     del_train_ids=del_train_file.read_text().splitlines()
     del_test_ids=del_test_file.read_text().splitlines()
     l=['H1','H2','H3']
-    indexes_of_cdrs=[[l.index(regions)]]
+    indexes_of_cdrs=[(0,l.index(regions))]
     print(indexes_of_cdrs)
     main(args, preprocessed_path,train_ids,val_ids,test_ids,del_train_ids,del_test_ids,indexes_of_cdrs)   
 
