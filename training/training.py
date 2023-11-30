@@ -277,7 +277,7 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
                     'optimizer_state_dict': optimizer.optimizer.state_dict(),
                     }, checkpoint_filename)
     
-    with open(base_folder+'val_accuracy_CDRs_no_ckpt.pkl', 'wb') as fp:
+    with open(base_folder+'val_accuracy.pkl', 'wb') as fp:
         pickle.dump(df,fp)
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
