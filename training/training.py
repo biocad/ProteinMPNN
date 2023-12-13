@@ -4,7 +4,7 @@ from pathlib import Path
 import pickle
 from tqdm import tqdm
 
-def dict_train_test_split(complex_list,train_ids,val_ids,test_ids,del_train_ids,del_test_ids):
+def dict_train_test_split(complex_list:list[str],train_ids:list[str],val_ids:list[str],test_ids:list[str],del_train_ids:list[str],del_test_ids:list[str]):
     d_train=[]
     d_val=[]
     complex_ids=set()
@@ -26,7 +26,7 @@ def dict_train_test_split(complex_list,train_ids,val_ids,test_ids,del_train_ids,
             print(f'Complex id {c["name_long"]} is not presented in train or test IDs')
     return d_train,d_val
 
-def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_test_ids,indexes_of_cdrs):
+def main(args, preprocessed_path:Path, train_ids:list[str], val_ids:list[str],test_ids:list[str],del_train_ids:list[str],del_test_ids:list[str],indexes_of_cdrs:list[tuple[int,int]]):
     import json, time, os, sys, glob
     import shutil
     import warnings
@@ -106,8 +106,6 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
     model.to(device)
     if PATH:
         checkpoint = torch.load(PATH)
-        # total_step = checkpoint['step'] #write total_step from the checkpoint
-        # epoch = checkpoint['epoch'] #write epoch from the checkpoint
         total_step = 0
         epoch = 0
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -116,10 +114,6 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
         epoch = 0
 
     optimizer = get_std_opt(model.parameters(), args.hidden_dim, total_step)
-
-
-    # if PATH:
-    #     optimizer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     d_train,d_test=dict_train_test_split(d,train_ids,val_ids,test_ids,del_train_ids,del_test_ids)
     dataset_train = StructureDataset(d_train, truncate=None, max_length=args.max_protein_length) 
@@ -190,16 +184,11 @@ def main(args, preprocessed_path, train_ids, val_ids,test_ids,del_train_ids,del_
                     validation_acc += torch.sum(true_false * mask_for_loss).cpu().data.numpy()
                     validation_weights += torch.sum(mask_for_loss).cpu().data.numpy()
             
-            # train_loss = train_sum / train_weights
-            # train_accuracy = train_acc / train_weights
-            # train_perplexity = np.exp(train_loss)
             validation_loss = validation_sum / validation_weights
             validation_accuracy = validation_acc / validation_weights
             validation_perplexity = np.exp(validation_loss)
             
-            #train_perplexity_ = np.format_float_positional(np.float32(train_perplexity), unique=False, precision=3)     
             validation_perplexity_ = np.format_float_positional(np.float32(validation_perplexity), unique=False, precision=3)
-            #train_accuracy_ = np.format_float_positional(np.float32(train_accuracy), unique=False, precision=3)
             validation_accuracy_ = np.format_float_positional(np.float32(validation_accuracy), unique=False, precision=3)
             df[(ind,jnd)].append(validation_accuracy_)
         with torch.no_grad():
@@ -322,14 +311,6 @@ if __name__ == "__main__":
     test_ids=test_file.read_text().splitlines()
     del_train_ids=del_train_file.read_text().splitlines()
     del_test_ids=del_test_file.read_text().splitlines()
-    l=['H1','H2','H3']
-    indexes_of_cdrs=[(0,l.index(regions))]
-    print(indexes_of_cdrs)
+    list_of_cdrs=['H1','H2','H3']
+    indexes_of_cdrs=[(0,list_of_cdrs.index(regions))]
     main(args, preprocessed_path,train_ids,val_ids,test_ids,del_train_ids,del_test_ids,indexes_of_cdrs)   
-
-
-
-# with open('data.pickle', 'rb') as f:
-#     data = pickle.load(f)
-# with open('val_accuracy_CDRs_no_ckpt.pkl', 'rb') as fp:
-#     d=pickle.load(fp)
