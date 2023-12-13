@@ -1,6 +1,7 @@
 from __future__ import print_function
 import json, time, os, sys, glob
 import shutil
+from typing import Sequence
 import numpy as np
 import torch
 from torch import optim
@@ -15,7 +16,10 @@ import torch.nn.functional as F
 import random
 import itertools
 
-def get_index_of_masks(len_seq:int,max_parts:int,max_length:int)->list[int]:
+from pathlib import Path
+from proteinlib.structure.antibody_antigen_complex import AntibodyAntigenComplex, NumberingScheme
+
+def get_mask_random(len_seq:int,max_parts:int,max_length:int)->list[int]:
     """
     Randomly generates mask with length equal to len_seq 
     Args:
@@ -27,7 +31,7 @@ def get_index_of_masks(len_seq:int,max_parts:int,max_length:int)->list[int]:
     """
     parts=random.randint(1,max_parts)
     tuples=[]
-    mask=[0]*len_seq
+    mask=np.zeros(len_seq)
     for _ in range(parts):
         s=random.randint(0,len_seq-max_length-1)
         e=random.randint(s,s+max_length-1)
@@ -36,13 +40,35 @@ def get_index_of_masks(len_seq:int,max_parts:int,max_length:int)->list[int]:
             if s>=t[0] and s<=t[1] or e>=t[0] and e<=t[1]:
                 f=True
                 break
-        if not f:
+        is_previous_masked=(s==0 or not mask[s-1])
+        is_next_masked=(e==len_seq-1 or not mask[e+1])
+        if not f and is_previous_masked and is_next_masked:
             tuples.append((s,e))
-            for i in range(s,e+1):
-                mask[i]=1
+            mask[s:(e+1)]=1
+    return mask.tolist()
+
+def get_mask_cdrs_one_chain(chain,indexes_of_cdrs:list[int]):
+    r=chain.region_boundaries
+    cdrs_index=[(r[i],r[i+1]) for i in range(1,len(r)-1,2)]
+    mask=np.zeros(len(chain.sequence))
+    for i in indexes_of_cdrs:
+        t=cdrs_index[i]
+        for i in range(t[0],t[1]):
+            mask[i]=1
     return mask
 
-def featurize(batch, device,max_parts=6,max_length=6):
+def get_mask_cdrs(pdb:Path,heavy_chain_id:str,light_chain_id:str,antigen_chain_ids:Sequence[str],indexes_of_cdrs:list[int],numbering=NumberingScheme.CHOTHIA,):
+    ab_complex = AntibodyAntigenComplex.from_pdb(
+        pdb=pdb,
+        heavy_chain_id=heavy_chain_id,
+        light_chain_id=light_chain_id,
+        antigen_chain_ids=antigen_chain_ids,
+        numbering=numbering,
+    )
+    return get_mask_cdrs_one_chain(ab_complex.antibody.heavy_chain,indexes_of_cdrs),get_mask_cdrs_one_chain(ab_complex.antibody.light_chain,indexes_of_cdrs)
+
+def featurize(batch, device,max_parts=8,max_length=20,mode='train',pdb_dir=Path('/mnt/sabdab/chothia'),cdr_indexes=[0,0]):
+    ind,jnd=cdr_indexes
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     B = len(batch)
     lengths = np.array([len(b['seq']) for b in batch], dtype=np.int32) #sum of chain seq lengths
@@ -106,7 +132,22 @@ def featurize(batch, device,max_parts=6,max_length=6):
                 chain_seq = b[f'seq_chain_{letter}']
                 chain_length = len(chain_seq)
                 chain_coords = b[f'coords_chain_{letter}'] #this is a dictionary
-                chain_mask=np.array(get_index_of_masks(len(chain_seq),max_parts,max_length))
+                if mode=='test':
+                    chain_mask=np.array(get_mask_random(chain_length,max_parts,max_length)) 
+                elif mode=='valid':
+                    if masked_chains.index(letter)==ind:
+                        chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],[jnd])[ind])
+                    else:
+                        chain_mask = np.zeros(chain_length)
+                    if chain_length!=chain_mask.shape[0]:
+                        if masked_chains.index(letter)==ind:
+                            chain_mask= np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],max_parts,max_length,[jnd])[ind])
+                        else:
+                            chain_mask = np.zeros(chain_length)
+
+                    assert chain_length==chain_mask.shape[0]
+                else:
+                    chain_mask=np.array(get_mask_cdrs(pdb_dir/f"{b['name']}.pdb",b['masked_list'][0],b['masked_list'][1],b['visible_list'],[0,1,2])[masked_chains.index(letter)])
                 x_chain = np.stack([chain_coords[c] for c in [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}', f'O_chain_{letter}']], 1) #[chain_lenght,4,3]
                 x_chain_list.append(x_chain)
                 chain_mask_list.append(chain_mask)
